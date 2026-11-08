@@ -634,7 +634,8 @@ class Session:
 
         def page() -> None:
             buf = io.StringIO()
-            console = Console(file=buf, force_terminal=True, color_system="truecolor", width=width(), highlight=False, theme=THEME)
+            # Height is required. On a dumb terminal Rich ignores a width-only Console and wraps at 80.
+            console = Console(file=buf, force_terminal=True, color_system="truecolor", width=width(), height=height(), highlight=False, theme=THEME)
             for item in items:
                 console.print(Text.from_ansi(item.text) if isinstance(item, Raw) else item)
             sys.stdout = self.real_out

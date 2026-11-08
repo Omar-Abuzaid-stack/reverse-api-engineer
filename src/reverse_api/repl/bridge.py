@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from rich.console import Console
 
 from ..utils import predates_effort
-from .style import THEME, width
+from .style import THEME, height, width
 from .transcript import Raw, TranscriptWriter
 from .view import KIND_VERB, LedgerView, default_effort, language_for
 
@@ -189,7 +189,10 @@ class LedgerUI:
         self.verbose = verbose
         # Engines also print directly; that output joins the conversation as plain lines.
         writer = TranscriptWriter(self._printed)
-        self.console = Console(file=cast(IO[str], writer), force_terminal=True, color_system="truecolor", width=width(), theme=THEME, highlight=False)
+        # Height is required. On a dumb terminal Rich ignores a width-only Console and wraps at 80.
+        self.console = Console(
+            file=cast(IO[str], writer), force_terminal=True, color_system="truecolor", width=width(), height=height(), theme=THEME, highlight=False
+        )
 
     def _printed(self, raw: Raw) -> None:
         self.view.out(raw)

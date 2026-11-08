@@ -20,6 +20,20 @@ def plain(transcript: Transcript) -> str:
     return "\n".join("".join(frag[1] for frag in line) for line in transcript.lines())
 
 
+def use_columns(monkeypatch: pytest.MonkeyPatch, columns: int) -> None:
+    """Make ``width()`` report ``columns``.
+
+    Rebinding the ``width`` function is not enough on Python 3.13: after that
+    function has run, the specializing interpreter can keep calling the original.
+    ``width`` reads ``shutil.get_terminal_size`` on every call, and that lookup
+    does follow a patch.
+    """
+    import os
+    import shutil
+
+    monkeypatch.setattr(shutil, "get_terminal_size", lambda *args, **kwargs: os.terminal_size((columns, 24)))
+
+
 @pytest.fixture
 def session():
     st = SessionState(model="claude-sonnet-5-5")
@@ -150,11 +164,9 @@ class TestLedgerUI:
         assert "run abc123" in "".join(text for _, text in view.status())
 
     def test_a_run_id_that_does_not_fit_is_left_out(self, session, monkeypatch):
-        from reverse_api.repl import view as view_module
-
         _st, _t, view, b = session
         LedgerUI(b).header("abc123", "prompt", model="claude-sonnet-5-5")
-        monkeypatch.setattr(view_module, "width", lambda: 40)
+        use_columns(monkeypatch, 40)
         assert "run abc123" not in "".join(text for _, text in view.status())
 
     def test_folded_output_offers_ctrl_o(self, session):
@@ -209,9 +221,9 @@ class TestTranscript:
     def test_width_change_rerenders(self, monkeypatch):
         t = Transcript(on_link=lambda _: None)
         t.add("word " * 30)
-        monkeypatch.setattr("reverse_api.repl.transcript.width", lambda: 60)
+        use_columns(monkeypatch, 60)
         narrow = len(t.lines())
-        monkeypatch.setattr("reverse_api.repl.transcript.width", lambda: 200)
+        use_columns(monkeypatch, 200)
         assert len(t.lines()) < narrow
 
 
@@ -607,12 +619,9 @@ def test_card_path_is_a_link(session, tmp_path):
 
 
 def test_a_long_step_stays_on_one_line_at_any_width(session, monkeypatch):
-    from reverse_api.repl import transcript, view
-
     _st, t, _view, b = session
     for cols in (60, 80, 140):
-        monkeypatch.setattr(view, "width", lambda cols=cols: cols)
-        monkeypatch.setattr(transcript, "width", lambda cols=cols: cols, raising=False)
+        use_columns(monkeypatch, cols)
         t.clear()
         LedgerUI(b).tool_start("Bash", {"command": "python /var/folders/bp/4wpy6h8d7s9f9btrd1sbplx40000gn/T/tmp1w10rt4r/api_client.py --limit 5"})
         lines = [line for line in plain(t).splitlines() if line.strip()]
@@ -1112,7 +1121,8 @@ class TestReviewedSession:
         _st, t, _view, b = session
         lines = [f"line {i} " + "x" * 300 for i in range(500)]
         LedgerUI(b).tool_result("Bash", output="\n".join(lines))
-        console = Console(file=io.StringIO(), width=400, color_system=None)
+        # height is required: with TERM=dumb, Rich ignores a width-only Console and wraps at 80.
+        console = Console(file=io.StringIO(), width=400, height=50, color_system=None)
         for item in t.full:
             console.print(item)
         out = console.file.getvalue()
