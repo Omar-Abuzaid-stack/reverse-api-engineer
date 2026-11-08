@@ -12,7 +12,7 @@ from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from rich.console import Console, RenderableType
 
-from .style import THEME, pt_style, width
+from .style import THEME, height, pt_style, width
 
 Line = list[tuple[Any, ...]]
 
@@ -75,7 +75,10 @@ class Transcript:
     def _render(self, item: RenderableType | Raw) -> list[Line]:
         if isinstance(item, Raw):
             return item.lines
-        console = Console(file=io.StringIO(), force_terminal=True, color_system="truecolor", width=width(), theme=THEME, highlight=False)
+        # Height is required. On a dumb terminal Rich ignores a width-only Console and wraps at 80.
+        console = Console(
+            file=io.StringIO(), force_terminal=True, color_system="truecolor", width=width(), height=height(), theme=THEME, highlight=False
+        )
         if isinstance(item, str):
             item = console.render_str(item, highlight=False)
         out: list[Line] = []
